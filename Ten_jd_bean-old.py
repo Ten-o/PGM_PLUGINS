@@ -18,9 +18,9 @@ cokie = 'pt_key=123123123;pt_pin=123123;'
 async def ql_ck():
     try:
         # 青龙地址
-        url = ''
-        id = ''
-        secret = ''
+        url = 'http://192.168.1.188:8888'
+        id = '123'
+        secret = '456'
 
         async with aiohttp.ClientSession() as session:
             tourl = f'{url}/open/auth/token?client_id={id}&client_secret={secret}'

@@ -19,9 +19,9 @@ cookie = []
 async def ql_ck():
     try:
         # 青龙地址
-        url = 'http://81.69.249.191:26974'
-        id = 'Oy_-VA0uP4zX'
-        secret = 'MMx_on9nL0NRw9rTkkpSwHGu'
+        url = 'http://192.168.1.188:8888'
+        id = '123'
+        secret = '456'
 
         async with aiohttp.ClientSession() as session:
             tourl = f'{url}/open/auth/token?client_id={id}&client_secret={secret}'
