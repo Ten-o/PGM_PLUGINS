@@ -2,26 +2,31 @@
 
 from pagermaid.enums import Client, Message
 from pagermaid.listener import listener, _lock
-from collections import defaultdict
-
+from datetime import datetime
+from urllib.parse import unquote_plus
 from collections import defaultdict
 import time
 import datetime
 import requests
 import asyncio
 import aiohttp
+import re
 
 # 青龙连不到调用
-cokie = 'pt_key=AAJkFdiUADCZrpdzDz8g6-ejkcAumS8htOBdl8-Vce53E-5FbDR6QLVuTVfgi80iQ0CqxxFH020;pt_pin=jd_625e49270164b;'
+cokie = ''
 cookie = []
+lowest = 10
 
+def update_lowest(new_value):
+    global lowest
+    lowest = new_value
 
 async def ql_ck():
     try:
         # 青龙地址
-        url = 'http://192.168.1.188:8888'
-        id = '123'
-        secret = '456'
+        url = ''
+        id = ''
+        secret = ''
 
         async with aiohttp.ClientSession() as session:
             tourl = f'{url}/open/auth/token?client_id={id}&client_secret={secret}'
@@ -73,7 +78,14 @@ async def interrup_request(day_time, ck,):
                     beans = False
     return data
 
-
+def pt_pin(cookie):
+    try:
+        pt_pin = re.compile(r'pt_pin=(.*?);').findall(cookie)[0]
+        pt_pin = unquote_plus(pt_pin)
+    except IndexError:
+        pt_pin = re.compile(r'pin=(.*?);').findall(cookie)[0]
+        pt_pin = unquote_plus(pt_pin)
+    return pt_pin
 
 async def data_process(data):
     data = sorted([[item[0].split(" ")[1], item[1].split("[")[1].split("]")[0] if "[" in item[1] else item[1],int(item[2])] for item in data], reverse=True)
@@ -93,7 +105,7 @@ async def data_process(data):
     msg = "{:<5} {:<5} {:<1}".format("奖励", '次数', "活动")
     for item in processed_data:
         count = sum([1 for x in data if x[1] == item[0]])
-        if int(item[1]) >= 20:
+        if int(item[1]) >= int(lowest):
             mse = "{:<6} {:<6} {:<1}".format(f'{item[1]}豆', count, item[0])
             jala += mse + "\n"
         elif int(item[1]) < 0:
@@ -210,10 +222,42 @@ async def bean(message: Message, bot: Client):
 
     except Exception as e:
         await message.edit(f'出现错误了 555 自动退出了哦.....{e}')
+@listener(command="b30", description="查近7天豆", parameters="<b7 id>")
+async def bean(message: Message, bot: Client):
+    try:
+        if message.reply_to_message:
+            text = message.reply_to_message.text
+        else:
+            text = message.arguments
+        if not text:
+            return await message.edit("出错了呜呜呜 ~ 没有成功获取到消息！")
+        else:
+            await message.edit("正在查询中.....")
+        today = datetime.date.today()
+        seven_days_ago = today - datetime.timedelta(days=29)
+        seven_days_ago_zero = int(time.mktime(seven_days_ago.timetuple()))
+        await ql_ck()
+        if len(cookie) >= 1:
+            ck = cookie[int(text) - int(1)]
+        else:
+            ck = cokie
+            await message.edit("未从QL获取到COOKIE 调用默认COOKIE")
+        data = await interrup_request(seven_days_ago_zero, ck)
+        if 'code' in data and data['code'] != 0:
+            await message.edit(f'{data}')
+            await asyncio.sleep(5)
+            await bot.delete_messages(message.chat.id, message.id)
+        else:
+            msg = await data_process(data)
+            await message.edit(f'近30日收入：{msg}本条信息将在30秒后自动销毁...')
+            await asyncio.sleep(30)
+            await bot.delete_messages(message.chat.id, message.id)
+
+    except Exception as e:
+        await message.edit(f'出现错误了 555 自动退出了哦.....{e}')
 
 @listener(command="b",description="查豆",parameters="<b id>")
 async def bean(message: Message,bot: Client):
-    try:
         if message.reply_to_message:
             text = message.reply_to_message.text
         else:
@@ -225,20 +269,50 @@ async def bean(message: Message,bot: Client):
         today = datetime.date.today()
         today_zero = int(time.mktime(today.timetuple()))
         await ql_ck()
-        if len(cookie) >= 1:
+        if "-" in text:
+            mesid = {}
+            key = 0
+            text = text.split("-")
+            for i in range(int(text[0]), int(text[1]) + 1):
+                ck = cookie[int(i) - int(1)]
+                data = await interrup_request(today_zero, ck)
+                msg = await data_process(data)
+                await bot.delete_messages(message.chat.id, message.id)
+                cat = await bot.send_message(message.chat.id,f'第{i}账号 今日收入：{msg}本条信息将在8秒后自动销毁...')
+                key = key + 1
+                mesid[key] = {'catid': cat.chat.id, 'msgid': cat.id}
+
+            await asyncio.sleep(8)
+            for i in mesid:
+                await bot.delete_messages(mesid[i]['catid'], mesid[i]['msgid'])
+        else:
             ck = cookie[int(text) - int(1)]
+            data = await interrup_request(today_zero, ck)
+            if 'code' in data and data['code'] != 0:
+                await message.edit(f'{data}')
+                await asyncio.sleep(5)
+                await bot.delete_messages(message.chat.id, message.id)
+            else:
+                msg = await data_process(data)
+                await message.edit(f'今日收入：{msg}本条信息将在7秒后自动销毁...')
+                await asyncio.sleep(7)
+                await bot.delete_messages(message.chat.id, message.id)
+
+
+
+@listener(command="low",description="设置最低查豆",parameters="<lowest 数量>")
+async def bean(message: Message,bot: Client):
+    try:
+        if message.reply_to_message:
+            text = message.reply_to_message.text
         else:
-            ck = cokie
-            await message.edit("未从QL获取到COOKIE 调用默认COOKIE")
-        data = await interrup_request(today_zero, ck)
-        if 'code' in data and data['code'] != 0:
-            await message.edit(f'{data}')
+            text = message.arguments
+        if not text:
+            return await message.edit("出错了呜呜呜 ~ 没有成功获取到消息！")
+        else:
+            update_lowest(text)
+            await message.edit(f"已设置最低查豆为 {lowest} 京豆")
             await asyncio.sleep(5)
-            await bot.delete_messages(message.chat.id, message.id)
-        else:
-            msg = await data_process(data)
-            await message.edit(f'今日收入：{msg}本条信息将在7秒后自动销毁...')
-            await asyncio.sleep(7)
             await bot.delete_messages(message.chat.id, message.id)
 
     except Exception as e:
